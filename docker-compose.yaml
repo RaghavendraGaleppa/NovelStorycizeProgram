@@ -1,15 +1,53 @@
 services:
+  # Database
   mongodb:
     image: mongo:latest
     container_name: mongodb_dev
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT}:${MONGO_PORT}"
     volumes:
       - mongo_data:/data/db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password123
-    restart: always
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    restart: unless-stopped
+
+  # Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: redis_dev
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    restart: unless-stopped
+
+  # FastAPI Server
+  server:
+    build: .
+    container_name: fastapi_server
+    # Gunicorn uses the port from .env
+    command: gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${SERVER_PORT}
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    env_file:
+      - .env
+    depends_on:
+      - mongodb
+      - redis
+
+  worker:
+    build: .
+    container_name: celery_worker
+    # Use -c for concurrency and --loglevel for verbosity
+    command: celery -A tasks worker --loglevel=${CELERY_LOG_LEVEL} --concurrency=${CELERY_CONCURRENCY} -n worker@%h
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mongodb
+    # This allows you to spawn multiple containers
+    deploy:
+      replicas: ${CELERY_WORKER_REPLICAS:-1}
+    restart: unless-stopped
 
 volumes:
   mongo_data:

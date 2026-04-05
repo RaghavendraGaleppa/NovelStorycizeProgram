@@ -4,7 +4,7 @@ services:
     image: mongo:latest
     container_name: mongodb_dev
     ports:
-      - "${MONGO_PORT}:${MONGO_PORT}"
+      - "27018:${MONGO_PORT}"
     volumes:
       - mongo_data:/data/db
     environment:
@@ -17,7 +17,7 @@ services:
     image: redis:7-alpine
     container_name: redis_dev
     ports:
-      - "${REDIS_PORT}:${REDIS_PORT}"
+      - "6380:${REDIS_PORT}"
     restart: unless-stopped
 
   # FastAPI Server
@@ -33,12 +33,13 @@ services:
     depends_on:
       - mongodb
       - redis
+    restart: unless-stopped
 
   worker:
     build: .
     container_name: celery_worker
     # Use -c for concurrency and --loglevel for verbosity
-    command: celery -A tasks worker --loglevel=${CELERY_LOG_LEVEL} --concurrency=${CELERY_CONCURRENCY} -n worker@%h
+    command: celery -A celery_app.tasks worker --loglevel=${CELERY_LOG_LEVEL} --concurrency=${CELERY_CONCURRENCY} -n worker@%h
     env_file:
       - .env
     depends_on:
